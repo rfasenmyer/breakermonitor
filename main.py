@@ -34,13 +34,16 @@ def connect_mqtt():
                        user=MQTT_USER or None, password=MQTT_PASSWORD or None, 
                        keepalive=60)
     client.connect()
-    print("MQTT connected")
+    # Test connection with ping
+    client.ping()
+    print("MQTT connected and verified")
     return client
 
 def main():
     print("Starting main")
     wlan = connect_wifi()
     client = None
+    message_count = 0
     
     while True:
         try:
@@ -50,13 +53,25 @@ def main():
                 wlan = connect_wifi()
                 client = None  # Force MQTT reconnection
             
-            if client is None:
+            # Force fresh MQTT connection every 10 messages to prevent stale connections
+            if client is None or message_count % 10 == 0:
+                if client is not None:
+                    try:
+                        client.disconnect()
+                    except:
+                        pass
                 client = connect_mqtt()
+                print(f"Fresh MQTT connection established (msg #{message_count})")
             
-            # Verify MQTT connection before publishing
+            # Publish with timestamp for debugging
+            timestamp = time.ticks_ms()
+            message = f"alive_{timestamp}".encode()
+            client.publish(MQTT_TOPIC, message, retain=True)
+            
+            # Verify broker received it with ping
             client.ping()
-            client.publish(MQTT_TOPIC, b"alive", retain=True)
-            print("mqtt published")
+            print(f"mqtt published and verified: {message}")
+            message_count += 1
             
             # Flash onboard LED when MQTT message is sent
             led = Pin("LED", Pin.OUT)
